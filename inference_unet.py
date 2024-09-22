@@ -15,12 +15,15 @@ from PIL import Image
 import gc
 from utils import load_unet_vgg16, load_unet_resnet_101, load_unet_resnet_34
 from tqdm import tqdm
+import copy
 
 def evaluate_img(model, img):
     input_width, input_height = input_size[0], input_size[1]
 
     img_1 = cv.resize(img, (input_width, input_height), cv.INTER_AREA)
+    cv.imwrite("./test.jpg", img_1)
     X = train_tfms(Image.fromarray(img_1))
+    # print(X)
     X = Variable(X.unsqueeze(0)).cuda()  # [N, 1, H, W]
 
     mask = model(X)
@@ -29,29 +32,49 @@ def evaluate_img(model, img):
     mask = cv.resize(mask, (img_width, img_height), cv.INTER_AREA)
     return mask
 
-def evaluate_img_patch(model, img):
+def evaluate_img_patch(model, img, stride_ratio):
     input_width, input_height = input_size[0], input_size[1]
+
+    orig_shape = copy.deepcopy(img.shape)
+
+    # stride_ratio = 1.0
+    stride = int(input_width * stride_ratio)
+
+    pad_x, pad_y = input_width - img.shape[0] % stride, input_height - img.shape[1] % stride
+
+    # print (pad_x, pad_y)
+
+    img = np.pad(img, ((0,pad_x), (0,pad_y), (0,0)), "constant", constant_values=(0, 0))
+    
+    # print(stride, img.shape)
+
+    # cv.imwrite("test.jpg", img)
 
     img_height, img_width, img_channels = img.shape
 
     if img_width < input_width or img_height < input_height:
         return evaluate_img(model, img)
 
-    stride_ratio = 0.1
-    stride = int(input_width * stride_ratio)
+    
+
 
     normalization_map = np.zeros((img_height, img_width), dtype=np.int16)
 
     patches = []
     patch_locs = []
-    for y in range(0, img_height - input_height + 1, stride):
-        for x in range(0, img_width - input_width + 1, stride):
+    for y in range(0, img_height-input_height+1, stride):
+        for x in range(0, img_width-input_width+1, stride):
+            # print(x,y)
             segment = img[y:y + input_height, x:x + input_width]
             normalization_map[y:y + input_height, x:x + input_width] += 1
             patches.append(segment)
             patch_locs.append((x, y))
+            # print(segment.shape)
+
+    # print(patches)
 
     patches = np.array(patches)
+    print("patch", patches.shape)
     if len(patch_locs) <= 0:
         return None
 
@@ -63,12 +86,18 @@ def evaluate_img_patch(model, img):
         mask = F.sigmoid(masks_pred[0, 0]).data.cpu().numpy()
         preds.append(mask)
 
+
     probability_map = np.zeros((img_height, img_width), dtype=float)
+    counter = np.zeros((img_height, img_width), dtype=float)
     for i, response in enumerate(preds):
         coords = patch_locs[i]
         probability_map[coords[1]:coords[1] + input_height, coords[0]:coords[0] + input_width] += response
+        counter[coords[1]:coords[1] + input_height, coords[0]:coords[0] + input_width] += np.ones((input_height, input_width), dtype=float)
+        # print(coords[1], coords[1] + input_height, coords[0], coords[0] + input_width)
+    # print(list(counter[:-pad_x, :-pad_y]))
+    n_pmap = np.divide(probability_map[:-pad_x, :-pad_y], counter[:-pad_x, :-pad_y])
 
-    return probability_map
+    return n_pmap
 
 def disable_axis():
     plt.axis('off')
@@ -85,6 +114,7 @@ if __name__ == '__main__':
     parser.add_argument('-out_viz_dir', type=str, default='', required=False, help='visualization output dir')
     parser.add_argument('-out_pred_dir', type=str, default='', required=False,  help='prediction output dir')
     parser.add_argument('-threshold', type=float, default=0.2 , help='threshold to cut off crack response')
+    parser.add_argument('-stride_ratio', type=float, default=1.0 , help='stride of patch, 0-1')
     args = parser.parse_args()
 
     if args.out_viz_dir != '':
@@ -144,7 +174,7 @@ if __name__ == '__main__':
             # plt.imshow(img_0), plt.title(f'{img_0.shape}')
             # plt.show()
 
-            prob_map_patch = evaluate_img_patch(model, img_1)
+            prob_map_patch = evaluate_img_patch(model, img_1, args.stride_ratio)
 
             #plt.title(f'name={path.stem}. \n cut-off threshold = {args.threshold}', fontsize=4)
             prob_map_viz_patch = prob_map_patch.copy()
@@ -159,6 +189,9 @@ if __name__ == '__main__':
             ax = fig.add_subplot(233)
             ax.imshow(img_1)
             ax.imshow(prob_map_viz_patch, alpha=0.4)
+
+            # cv.imwrite("test.jpg", prob_map_viz_patch)
+            print(prob_map_viz_patch, prob_map_viz_patch.max(), prob_map_viz_patch.mean())
 
             prob_map_viz_full = prob_map_full.copy()
             prob_map_viz_full[prob_map_viz_full < args.threshold] = 0.0
