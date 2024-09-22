@@ -21,7 +21,7 @@ def evaluate_img(model, img):
     input_width, input_height = input_size[0], input_size[1]
 
     img_1 = cv.resize(img, (input_width, input_height), cv.INTER_AREA)
-    cv.imwrite("./test.jpg", img_1)
+    # cv.imwrite("./test.jpg", img_1)
     X = train_tfms(Image.fromarray(img_1))
     # print(X)
     X = Variable(X.unsqueeze(0)).cuda()  # [N, 1, H, W]
@@ -74,7 +74,7 @@ def evaluate_img_patch(model, img, stride_ratio):
     # print(patches)
 
     patches = np.array(patches)
-    print("patch", patches.shape)
+    # print("patch", patches.shape)
     if len(patch_locs) <= 0:
         return None
 
@@ -191,7 +191,7 @@ if __name__ == '__main__':
             ax.imshow(prob_map_viz_patch, alpha=0.4)
 
             # cv.imwrite("test.jpg", prob_map_viz_patch)
-            print(prob_map_viz_patch, prob_map_viz_patch.max(), prob_map_viz_patch.mean())
+            # print(prob_map_viz_patch, prob_map_viz_patch.max(), prob_map_viz_patch.mean())
 
             prob_map_viz_full = prob_map_full.copy()
             prob_map_viz_full[prob_map_viz_full < args.threshold] = 0.0
