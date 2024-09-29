@@ -111,11 +111,15 @@ if __name__ == '__main__':
     parser.add_argument('-img_dir',type=str, help='input dataset directory')
     parser.add_argument('-model_path', type=str, help='trained model path')
     parser.add_argument('-model_type', type=str, choices=['vgg16', 'resnet101', 'resnet34'])
-    parser.add_argument('-out_viz_dir', type=str, default='', required=False, help='visualization output dir')
-    parser.add_argument('-out_pred_dir', type=str, default='', required=False,  help='prediction output dir')
+    # parser.add_argument('-out_viz_dir', type=str, default='', required=False, help='visualization output dir')
+    # parser.add_argument('-out_pred_dir', type=str, default='', required=False,  help='prediction output dir')
     parser.add_argument('-threshold', type=float, default=0.2 , help='threshold to cut off crack response')
     parser.add_argument('-stride_ratio', type=float, default=1.0 , help='stride of patch, 0-1')
     args = parser.parse_args()
+
+    args.out_viz_dir = f"result_viz_{args.threshold}_{args.stride_ratio}"
+    args.out_pred_dir = f"result_{args.threshold}_{args.stride_ratio}"
+
 
     if args.out_viz_dir != '':
         os.makedirs(args.out_viz_dir, exist_ok=True)
@@ -195,6 +199,7 @@ if __name__ == '__main__':
 
             prob_map_viz_full = prob_map_full.copy()
             prob_map_viz_full[prob_map_viz_full < args.threshold] = 0.0
+            prob_map_viz_full[prob_map_viz_full >= args.threshold] = 1.0
 
             ax = fig.add_subplot(234)
             ax.imshow(img_0)
