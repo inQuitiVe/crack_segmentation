@@ -184,6 +184,7 @@ if __name__ == '__main__':
             prob_map_viz_patch = prob_map_patch.copy()
             prob_map_viz_patch = prob_map_viz_patch/ prob_map_viz_patch.max()
             prob_map_viz_patch[prob_map_viz_patch < args.threshold] = 0.0
+            prob_map_viz_patch[prob_map_viz_patch >= args.threshold] = 1.0
             fig = plt.figure()
             st = fig.suptitle(f'name={path.stem} \n cut-off threshold = {args.threshold}', fontsize="x-large")
             ax = fig.add_subplot(231)
@@ -199,7 +200,7 @@ if __name__ == '__main__':
 
             prob_map_viz_full = prob_map_full.copy()
             prob_map_viz_full[prob_map_viz_full < args.threshold] = 0.0
-            prob_map_viz_full[prob_map_viz_full >= args.threshold] = 1.0
+            
 
             ax = fig.add_subplot(234)
             ax.imshow(img_0)
