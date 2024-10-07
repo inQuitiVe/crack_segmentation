@@ -99,6 +99,23 @@ def evaluate_img_patch(model, img, stride_ratio):
 
     return n_pmap
 
+def IOU(gt, pred):
+    TP, TN, FN, FP = [0, 0, 0, 0]
+    # print(gt.shape)
+    for i in range(gt.shape[0]):
+        for j in range(gt.shape[1]):
+            if gt[i, j] == pred[i, j]:
+                if gt[i, j] == 255:
+                    TP += 1
+                else:
+                    TN += 1
+            else:
+                if gt[i, j] == 255:
+                    FN += 1
+                else:
+                    FP += 1
+    return TP / (TP + FN + FP)
+
 def disable_axis():
     plt.axis('off')
     plt.gca().axes.get_xaxis().set_visible(False)
@@ -113,8 +130,10 @@ if __name__ == '__main__':
     parser.add_argument('-model_type', type=str, choices=['vgg16', 'resnet101', 'resnet34'])
     # parser.add_argument('-out_viz_dir', type=str, default='', required=False, help='visualization output dir')
     # parser.add_argument('-out_pred_dir', type=str, default='', required=False,  help='prediction output dir')
-    parser.add_argument('-threshold', type=float, default=0.2 , help='threshold to cut off crack response')
+    parser.add_argument('-threshold', type=float, default=-1 , help='threshold to cut off crack response')
     parser.add_argument('-stride_ratio', type=float, default=1.0 , help='stride of patch, 0-1')
+    parser.add_argument('-label_path', type=str, default="" , help='label directory')
+    parser.add_argument('-grayscale', action="store_true", help='grayscale input')
     args = parser.parse_args()
 
     args.out_viz_dir = f"result_viz_{args.threshold}_{args.stride_ratio}"
@@ -147,9 +166,12 @@ if __name__ == '__main__':
 
     paths = [path for path in Path(args.img_dir).glob('*.*')]
     for path in tqdm(paths):
-        #print(str(path))
+        # print(str(path))
 
-        train_tfms = transforms.Compose([transforms.ToTensor(), transforms.Normalize(channel_means, channel_stds)])
+        if args.grayscale:
+          train_tfms = transforms.Compose([transforms.Grayscale(num_output_channels=3), transforms.ToTensor(), transforms.Normalize(channel_means, channel_stds)])
+        else:
+          train_tfms = transforms.Compose([transforms.ToTensor(), transforms.Normalize(channel_means, channel_stds)])
 
         img_0 = Image.open(str(path))
         img_0 = np.asarray(img_0)
@@ -159,9 +181,13 @@ if __name__ == '__main__':
 
         img_0 = img_0[:,:,:3]
 
+        img_0 = cv.resize(img_0, (2000, 1500), cv.INTER_AREA)
+
         img_height, img_width, img_channels = img_0.shape
 
         prob_map_full = evaluate_img(model, img_0)
+
+        
 
         if args.out_pred_dir != '':
             cv.imwrite(filename=join(args.out_pred_dir, f'{path.stem}.jpg'), img=(prob_map_full * 255).astype(np.uint8))
@@ -180,11 +206,34 @@ if __name__ == '__main__':
 
             prob_map_patch = evaluate_img_patch(model, img_1, args.stride_ratio)
 
-            #plt.title(f'name={path.stem}. \n cut-off threshold = {args.threshold}', fontsize=4)
-            prob_map_viz_patch = prob_map_patch.copy()
-            prob_map_viz_patch = prob_map_viz_patch/ prob_map_viz_patch.max()
-            prob_map_viz_patch[prob_map_viz_patch < args.threshold] = 0.0
-            prob_map_viz_patch[prob_map_viz_patch >= args.threshold] = 1.0
+
+            if args.threshold != -1:
+              prob_map_viz_patch = prob_map_patch.copy()
+              prob_map_viz_patch = prob_map_viz_patch/ prob_map_viz_patch.max()
+              prob_map_viz_patch[prob_map_viz_patch < args.threshold] = 0.0
+              prob_map_viz_patch[prob_map_viz_patch >= args.threshold] = 1.0
+
+              img_gt = Image.open(str(args.label_path))
+              img_gt = np.asarray(img_gt)
+
+              res_patch = cv.resize((prob_map_viz_patch * 255).astype(np.uint8), (1600, 1200), interpolation=cv.INTER_AREA)
+              cv.imwrite(filename=f'test.jpg', img=res_patch)
+              print("\n IOU = ", IOU(img_gt, res_patch))
+
+            else:
+              for thresh in np.arange(0.002,0.05,0.002):
+                prob_map_viz_patch = prob_map_patch.copy()
+                prob_map_viz_patch = prob_map_viz_patch/ prob_map_viz_patch.max()
+                prob_map_viz_patch[prob_map_viz_patch < thresh] = 0.0
+                prob_map_viz_patch[prob_map_viz_patch >= thresh] = 1.0
+
+                img_gt = Image.open(str(args.label_path))
+                img_gt = np.asarray(img_gt)
+
+                res_patch = cv.resize((prob_map_viz_patch * 255).astype(np.uint8), (1600, 1200), interpolation=cv.INTER_AREA)
+                cv.imwrite(filename=f'test_{thresh}.jpg', img=res_patch)
+                print(f"IOU when thresh = {thresh}: ", IOU(img_gt, res_patch))
+
             fig = plt.figure()
             st = fig.suptitle(f'name={path.stem} \n cut-off threshold = {args.threshold}', fontsize="x-large")
             ax = fig.add_subplot(231)
