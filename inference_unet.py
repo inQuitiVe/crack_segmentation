@@ -101,7 +101,7 @@ def evaluate_img_patch(model, img, stride_ratio):
 
 def IOU(gt, pred):
     TP, TN, FN, FP = [0, 0, 0, 0]
-    # print(gt.shape)
+    # print(gt.shape, pred.shape)
     for i in range(gt.shape[0]):
         for j in range(gt.shape[1]):
             if gt[i, j] == pred[i, j]:
@@ -114,6 +114,8 @@ def IOU(gt, pred):
                     FN += 1
                 else:
                     FP += 1
+
+    print(f"TP = {TP}, FN = {FN}, TN = {TN}, FP = {FP}, recall = {TP/(TP+FN)}, precision = {TP/(TP+FP)}")
     return TP / (TP + FN + FP)
 
 def disable_axis():
@@ -218,10 +220,11 @@ if __name__ == '__main__':
 
               res_patch = cv.resize((prob_map_viz_patch * 255).astype(np.uint8), (1600, 1200), interpolation=cv.INTER_AREA)
               cv.imwrite(filename=f'test.jpg', img=res_patch)
-              print("\n IOU = ", IOU(img_gt, res_patch))
+              print("\n IOU = ", IOU(img_gt, res_patch)[0])
 
             else:
-              for thresh in np.arange(0.002,0.05,0.002):
+              for thresh_it in range(1,20):
+                thresh = thresh_it/500
                 prob_map_viz_patch = prob_map_patch.copy()
                 prob_map_viz_patch = prob_map_viz_patch/ prob_map_viz_patch.max()
                 prob_map_viz_patch[prob_map_viz_patch < thresh] = 0.0
@@ -232,7 +235,7 @@ if __name__ == '__main__':
 
                 res_patch = cv.resize((prob_map_viz_patch * 255).astype(np.uint8), (1600, 1200), interpolation=cv.INTER_AREA)
                 cv.imwrite(filename=f'test_{thresh}.jpg', img=res_patch)
-                print(f"IOU when thresh = {thresh}: ", IOU(img_gt, res_patch))
+                print(f"IOU when thresh = {thresh}: ", IOU(img_gt, res_patch), "\n")
 
             fig = plt.figure()
             st = fig.suptitle(f'name={path.stem} \n cut-off threshold = {args.threshold}', fontsize="x-large")
